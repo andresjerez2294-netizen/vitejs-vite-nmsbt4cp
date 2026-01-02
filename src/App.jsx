@@ -24,7 +24,9 @@ const GlobalStyles = () => (
     input[type="color"] { -webkit-appearance: none; border: none; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; cursor: pointer; padding: 0; background: none; }
     input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
     input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; border: 2px solid #334155; }
-    input[type="date"] { color-scheme: dark; cursor: pointer; }
+    /* Fix para fecha en iOS/Mobile */
+    input[type="date"] { -webkit-appearance: none; background: transparent; color: white; width: 100%; }
+    ::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
     .recharts-text { fill: #94a3b8 !important; font-size: 10px; font-weight: bold; }
   `}</style>
 );
@@ -65,9 +67,9 @@ const CustomSelect = ({ value, onChange, options, type, label }) => {
   return (
     <div className="relative w-full">
       {label && <span className="text-[10px] text-slate-500 font-bold ml-1 mb-0.5 block uppercase">{label}</span>}
-      <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-left text-white flex justify-between items-center outline-none active:bg-slate-800 transition-colors">
+      <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-left text-white flex justify-between items-center outline-none active:bg-slate-800 transition-colors">
         <span className={`font-bold text-xs truncate ${!value ? 'text-slate-500' : ''}`}>{displayLabel || "Seleccionar"}</span>
-        <ChevronDown size={14} className={`transition-transform text-slate-400 ${isOpen ? 'rotate-180' : ''}`}/>
+        <ChevronDown size={16} className={`transition-transform text-slate-400 ${isOpen ? 'rotate-180' : ''}`}/>
       </button>
       {isOpen && (
         <>
@@ -99,8 +101,15 @@ const MoneyInput = ({ value, onChange, placeholder }) => {
   );
 };
 
+// NUEVO COMPONENTE DE FECHA (Para evitar que se salga)
+const DateInput = ({ value, onChange }) => (
+  <div className="relative w-full bg-slate-900 border border-slate-700 rounded-xl flex items-center px-3 py-2.5 focus-within:border-purple-500 transition-colors">
+    <input type="date" value={value} onChange={onChange} className="bg-transparent text-white w-full outline-none font-bold text-xs z-10 uppercase"/>
+    <Calendar size={16} className="text-slate-400 absolute right-3 pointer-events-none"/> 
+  </div>
+);
+
 const AccountsPanel = ({ accounts, transactions }) => {
-  // GRID 2x2 para móvil (se ve todo de un vistazo)
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-4">
       {accounts.map(acc => {
@@ -141,7 +150,7 @@ const TransactionForm = ({ formData, setFormData, onSave, accounts, fixedNames, 
           {formData.type === 'transfer' ? (<div className="grid grid-cols-2 gap-2"><CustomSelect value={formData.account} onChange={v=>setFormData({...formData, account: v})} options={accounts} type="account" label="Desde" /><CustomSelect value={formData.toAccount} onChange={v=>setFormData({...formData, toAccount: v})} options={accounts} type="account" label="Para" /></div>) : (<div className="grid grid-cols-2 gap-1.5">{accounts.slice(0,4).map(acc => ( <button type="button" key={acc.id} onClick={() => setFormData({...formData, account: acc.id})} className={`py-2 px-1 rounded-lg text-[10px] font-bold transition-all border ${formData.account === acc.id || (!formData.account && acc.id === accounts[0].id) ? `${acc.color} border-current text-white bg-slate-800` : 'bg-slate-800 border-transparent text-slate-400'}`} style={(formData.account === acc.id || (!formData.account && acc.id === accounts[0].id)) ? { color: acc.color } : {}}>{acc.name}</button> ))}</div>)}
           <MoneyInput value={formData.amount} onChange={(v)=>setFormData({...formData, amount: v})} placeholder="Monto" />
           {formData.type !== 'transfer' && (<><input type="text" placeholder="Descripción" className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-purple-500" value={formData.description} onChange={e=>setFormData({...formData, description: e.target.value})} /><CustomSelect value={formData.category} onChange={c=>setFormData({...formData, category: c})} options={formData.type === 'income' ? [{label:'Ingresos', color:'text-emerald-400', items:['Salario', 'Negocios', 'Venta', 'Otros']}] : [{label:'Gastos Fijos', color:'text-orange-400', items: fixedNames},{label:'Gastos Variables', color:'text-blue-400', items: ['Alimentación', 'Transporte', 'Vivienda Extra', 'Salud', 'Educación', 'Diversión', 'Otros']}]} type="category" /></>)}
-          <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-purple-500 font-bold"/>
+          <DateInput value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
           <button type="submit" className={`w-full font-bold py-3 rounded-xl shadow-lg active:scale-95 ${formData.type === 'income' ? 'bg-emerald-600' : formData.type === 'expense' ? 'bg-red-600' : 'bg-blue-600'} text-white text-sm`}>Guardar</button>
         </form>
       </div>
@@ -485,7 +494,7 @@ function Dashboard({ user, logout }) {
       <ConfirmDialog isOpen={dialog.isOpen} title={dialog.title} message={dialog.msg} onConfirm={executeConfirm} onCancel={closeConfirm} isDanger={dialog.isDanger} />
 
       <div className="max-w-7xl mx-auto">
-        {/* HEADER COMPACTO: Título arriba, Selectores abajo */}
+        {/* HEADER COMPACTO V100 */}
         <div className="flex flex-col gap-3 mb-4">
            <div className="flex justify-between items-center">
              <h1 className="text-base font-bold text-white flex items-center gap-2 truncate"><div className="bg-gradient-to-br from-purple-600 to-blue-600 p-1.5 rounded-lg shadow-lg"><Wallet className="text-white" size={16}/></div>{appTitle}</h1>
