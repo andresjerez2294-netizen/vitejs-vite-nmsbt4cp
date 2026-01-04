@@ -3,7 +3,7 @@ import {
   Wallet, TrendingUp, TrendingDown, Settings, 
   X, Search, Calendar, BarChart3, ChevronDown, ArrowRightLeft, 
   Trash2, LogOut, Plus, RefreshCw, CheckCircle, AlertOctagon,
-  Edit2, Brain, Copy, Target, PiggyBank
+  Edit2, Brain, Copy, Target, PiggyBank, Save, Download, Upload
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
@@ -11,7 +11,7 @@ import {
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
-import { collection, addDoc, onSnapshot, deleteDoc, doc, query, where, getDocs, writeBatch, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, where, getDocs, writeBatch, setDoc, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
 
 // --- ESTILOS GLOBAL ---
@@ -24,9 +24,17 @@ const GlobalStyles = () => (
     input[type="color"] { -webkit-appearance: none; border: none; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; cursor: pointer; padding: 0; background: none; }
     input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
     input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; border: 2px solid #334155; }
-    /* Fix para fecha en iOS/Mobile */
-    input[type="date"] { -webkit-appearance: none; background: transparent; color: white; width: 100%; }
-    ::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
+    
+    /* FECHA NATIVA SIMPLE Y LIMPIA */
+    input[type="date"] { 
+        color-scheme: dark; 
+        background: transparent; 
+        color: white; 
+        width: 100%; 
+        cursor: pointer;
+        min-height: 40px;
+    }
+    
     .recharts-text { fill: #94a3b8 !important; font-size: 10px; font-weight: bold; }
   `}</style>
 );
@@ -101,14 +109,6 @@ const MoneyInput = ({ value, onChange, placeholder }) => {
   );
 };
 
-// NUEVO COMPONENTE DE FECHA (Para evitar que se salga)
-const DateInput = ({ value, onChange }) => (
-  <div className="relative w-full bg-slate-900 border border-slate-700 rounded-xl flex items-center px-3 py-2.5 focus-within:border-purple-500 transition-colors">
-    <input type="date" value={value} onChange={onChange} className="bg-transparent text-white w-full outline-none font-bold text-xs z-10 uppercase"/>
-    <Calendar size={16} className="text-slate-400 absolute right-3 pointer-events-none"/> 
-  </div>
-);
-
 const AccountsPanel = ({ accounts, transactions }) => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-4">
@@ -150,7 +150,12 @@ const TransactionForm = ({ formData, setFormData, onSave, accounts, fixedNames, 
           {formData.type === 'transfer' ? (<div className="grid grid-cols-2 gap-2"><CustomSelect value={formData.account} onChange={v=>setFormData({...formData, account: v})} options={accounts} type="account" label="Desde" /><CustomSelect value={formData.toAccount} onChange={v=>setFormData({...formData, toAccount: v})} options={accounts} type="account" label="Para" /></div>) : (<div className="grid grid-cols-2 gap-1.5">{accounts.slice(0,4).map(acc => ( <button type="button" key={acc.id} onClick={() => setFormData({...formData, account: acc.id})} className={`py-2 px-1 rounded-lg text-[10px] font-bold transition-all border ${formData.account === acc.id || (!formData.account && acc.id === accounts[0].id) ? `${acc.color} border-current text-white bg-slate-800` : 'bg-slate-800 border-transparent text-slate-400'}`} style={(formData.account === acc.id || (!formData.account && acc.id === accounts[0].id)) ? { color: acc.color } : {}}>{acc.name}</button> ))}</div>)}
           <MoneyInput value={formData.amount} onChange={(v)=>setFormData({...formData, amount: v})} placeholder="Monto" />
           {formData.type !== 'transfer' && (<><input type="text" placeholder="Descripción" className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-purple-500" value={formData.description} onChange={e=>setFormData({...formData, description: e.target.value})} /><CustomSelect value={formData.category} onChange={c=>setFormData({...formData, category: c})} options={formData.type === 'income' ? [{label:'Ingresos', color:'text-emerald-400', items:['Salario', 'Negocios', 'Venta', 'Otros']}] : [{label:'Gastos Fijos', color:'text-orange-400', items: fixedNames},{label:'Gastos Variables', color:'text-blue-400', items: ['Alimentación', 'Transporte', 'Vivienda Extra', 'Salud', 'Educación', 'Diversión', 'Otros']}]} type="category" /></>)}
-          <DateInput value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+          
+          {/* INPUT DE FECHA NATIVO - SIN CONTENEDORES RAROS */}
+          <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1 focus-within:border-purple-500">
+             <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+          </div>
+
           <button type="submit" className={`w-full font-bold py-3 rounded-xl shadow-lg active:scale-95 ${formData.type === 'income' ? 'bg-emerald-600' : formData.type === 'expense' ? 'bg-red-600' : 'bg-blue-600'} text-white text-sm`}>Guardar</button>
         </form>
       </div>
@@ -255,7 +260,7 @@ const AnnualModal = ({ isOpen, onClose, year, annualData, annualIncome, annualEx
   );
 }
 
-const ConfigModal = ({ isOpen, onClose, mainGoal, updateMainGoal, appTitle, updateAppTitle, accounts, addAccount, deleteAccount, fixedExpensesList, addFixedExpense, deleteFixedExpense, resetAllData, goalOptions, newAccName, setNewAccName, newAccColor, setNewAccColor, newFixedName, setNewFixedName, newFixedBudget, setNewFixedBudget }) => {
+const ConfigModal = ({ isOpen, onClose, mainGoal, updateMainGoal, appTitle, updateAppTitle, accounts, addAccount, deleteAccount, fixedExpensesList, addFixedExpense, deleteFixedExpense, resetAllData, goalOptions, newAccName, setNewAccName, newAccColor, setNewAccColor, newFixedName, setNewFixedName, newFixedBudget, setNewFixedBudget, editingFixedId, editFixedExpense, exportData, importData }) => {
     if(!isOpen) return null;
     return (
       <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4">
@@ -268,6 +273,16 @@ const ConfigModal = ({ isOpen, onClose, mainGoal, updateMainGoal, appTitle, upda
                 <label className="text-[9px] text-slate-500 font-bold uppercase mb-1 block">Objetivo</label>
                 <CustomSelect value={mainGoal} onChange={updateMainGoal} options={goalOptions} type="goal" />
              </div>
+             
+             {/* ZONA DE COPIA DE SEGURIDAD */}
+             <div className="bg-slate-900 p-3 rounded-xl flex gap-2">
+                <button onClick={exportData} className="flex-1 bg-slate-800 py-2 rounded-lg text-[10px] font-bold text-emerald-400 border border-emerald-900/50 flex items-center justify-center gap-1 active:scale-95 transition-transform"><Download size={12}/> Copia Seguridad</button>
+                <label className="flex-1 bg-slate-800 py-2 rounded-lg text-[10px] font-bold text-blue-400 border border-blue-900/50 flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform">
+                    <Upload size={12}/> Restaurar
+                    <input type="file" onChange={importData} className="hidden" accept=".json"/>
+                </label>
+             </div>
+
              <div className="bg-slate-900 p-3 rounded-xl"><label className="text-[9px] text-slate-500 font-bold uppercase mb-1 block">Título</label><input value={appTitle} onChange={e=>updateAppTitle(e.target.value)} className="bg-transparent border-b border-purple-500 text-white w-full outline-none text-xs pb-1"/></div>
              
              <div className="bg-slate-900 p-3 rounded-xl">
@@ -277,9 +292,23 @@ const ConfigModal = ({ isOpen, onClose, mainGoal, updateMainGoal, appTitle, upda
              </div>
 
              <div className="bg-slate-900 p-3 rounded-xl">
-                <h3 className="text-white text-xs font-bold mb-2">Fijos</h3>
-                <div className="flex gap-2 mb-2 items-center"><input placeholder="Nombre" value={newFixedName} onChange={e=>setNewFixedName(e.target.value)} className="bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] text-white w-full outline-none"/><input placeholder="$" type="number" value={newFixedBudget} onChange={e=>setNewFixedBudget(e.target.value)} className="bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] text-white w-14 outline-none text-center"/><button onClick={addFixedExpense} className="bg-orange-600 p-1.5 rounded-lg text-white"><Plus size={14}/></button></div>
-                <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-hide">{fixedExpensesList.map(i=><div key={i.id} className="flex justify-between p-1.5 bg-slate-800 rounded-lg text-white text-[10px]"><span>{i.name} ({formatCurrency(i.budget)})</span><Trash2 size={10} className="text-red-400 cursor-pointer" onClick={()=>deleteFixedExpense(i.id)} /></div>)}</div>
+                <h3 className="text-white text-xs font-bold mb-2">Fijos {editingFixedId ? '(Editando)' : ''}</h3>
+                <div className="flex gap-2 mb-2 items-center">
+                    <input placeholder="Nombre" value={newFixedName} onChange={e=>setNewFixedName(e.target.value)} className="bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] text-white w-full outline-none"/>
+                    <input placeholder="$" type="number" value={newFixedBudget} onChange={e=>setNewFixedBudget(e.target.value)} className="bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] text-white w-14 outline-none text-center"/>
+                    <button onClick={addFixedExpense} className={`${editingFixedId ? 'bg-emerald-600' : 'bg-orange-600'} p-1.5 rounded-lg text-white`}>{editingFixedId ? <Save size={14}/> : <Plus size={14}/>}</button>
+                </div>
+                <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-hide">
+                    {fixedExpensesList.map(i=>(
+                        <div key={i.id} className="flex justify-between items-center p-1.5 bg-slate-800 rounded-lg text-white text-[10px]">
+                            <span>{i.name} ({formatCurrency(i.budget)})</span>
+                            <div className="flex gap-2">
+                                <Edit2 size={10} className="text-blue-400 cursor-pointer" onClick={()=>editFixedExpense(i)}/>
+                                <Trash2 size={10} className="text-red-400 cursor-pointer" onClick={()=>deleteFixedExpense(i.id)} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
              </div>
              
              <button onClick={resetAllData} className="w-full text-red-400 text-[10px] font-bold border border-red-900/50 hover:bg-red-900/20 py-2.5 rounded-xl flex items-center justify-center gap-2 mt-2"><RefreshCw size={10}/> Reiniciar Todo</button>
@@ -345,8 +374,12 @@ function Dashboard({ user, logout }) {
   // Inputs
   const [newAccName, setNewAccName] = useState('');
   const [newAccColor, setNewAccColor] = useState('#3b82f6');
+  
+  // FIXED INPUTS + EDITING STATE
   const [newFixedName, setNewFixedName] = useState('');
   const [newFixedBudget, setNewFixedBudget] = useState('');
+  const [editingFixedId, setEditingFixedId] = useState(null);
+
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalTarget, setNewGoalTarget] = useState('');
   const [newGoalCurrent, setNewGoalCurrent] = useState('');
@@ -390,7 +423,35 @@ function Dashboard({ user, logout }) {
   const updateMainGoal = (val) => { setMainGoal(val); saveSettingsToFirebase({ mainGoal: val }); };
   const addAccount = () => { if(!newAccName) return; const newId = newAccName.toLowerCase().replace(/\s+/g, '') + Date.now(); const newAccs = [...accounts, { id: newId, name: newAccName, color: newAccColor }]; saveSettingsToFirebase({ accounts: newAccs }); setNewAccName(''); setNewAccColor('#3b82f6'); };
   const deleteAccount = (id) => { const newAccs = accounts.filter(a => a.id !== id); saveSettingsToFirebase({ accounts: newAccs }); };
-  const addFixedExpense = () => { if(!newFixedName || !newFixedBudget) return; const newFixed = [...fixedExpensesList, { id: Date.now(), name: newFixedName, budget: Number(newFixedBudget) }]; saveSettingsToFirebase({ fixedExpensesList: newFixed }); setNewFixedName(''); setNewFixedBudget(''); };
+  
+  // FIXED EXPENSES: ADD OR EDIT
+  const addFixedExpense = () => { 
+      if(!newFixedName || !newFixedBudget) return; 
+      
+      let newFixed;
+      if (editingFixedId) {
+          // Update existing
+          newFixed = fixedExpensesList.map(item => 
+              item.id === editingFixedId 
+              ? { ...item, name: newFixedName, budget: Number(newFixedBudget) } 
+              : item
+          );
+          setEditingFixedId(null); // Exit edit mode
+      } else {
+          // Add new
+          newFixed = [...fixedExpensesList, { id: Date.now(), name: newFixedName, budget: Number(newFixedBudget) }]; 
+      }
+      
+      saveSettingsToFirebase({ fixedExpensesList: newFixed }); 
+      setNewFixedName(''); setNewFixedBudget(''); 
+  };
+  
+  const editFixedExpense = (item) => {
+      setNewFixedName(item.name);
+      setNewFixedBudget(item.budget.toString());
+      setEditingFixedId(item.id);
+  };
+
   const deleteFixedExpense = (id) => { const newFixed = fixedExpensesList.filter(x => x.id !== id); saveSettingsToFirebase({ fixedExpensesList: newFixed }); };
 
   const addGoal = () => {
@@ -401,6 +462,64 @@ function Dashboard({ user, logout }) {
     setNewGoalName(''); setNewGoalTarget(''); setNewGoalCurrent('');
   };
   const deleteGoal = (id) => { const newGoals = goalsList.filter(g => g.id !== id); saveSettingsToFirebase({ goalsList: newGoals }); };
+
+  // IMPORT / EXPORT FUNCTIONS
+  const exportData = async () => {
+      try {
+          const settingsSnap = await getDoc(doc(db, "user_settings", user.uid));
+          const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+          const q = query(collection(db, "transactions"), where("uid", "==", user.uid));
+          const transSnap = await getDocs(q);
+          const trans = transSnap.docs.map(d => ({...d.data(), _id: d.id}));
+          
+          const backupData = { version: 1, date: new Date().toISOString(), settings, transactions: trans };
+          
+          const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `backup_finanzas_${new Date().toISOString().split('T')[0]}.json`;
+          a.click();
+          showToast("Copia descargada ✅");
+      } catch (e) { showToast("Error al exportar", "error"); }
+  };
+
+  const importData = async (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+         try {
+             const data = JSON.parse(event.target.result);
+             if(!data.settings && !data.transactions) throw new Error("Archivo inválido");
+
+             showToast("Restaurando...", "success");
+
+             if(data.settings) {
+                 await setDoc(doc(db, "user_settings", user.uid), data.settings, { merge: true });
+             }
+
+             if(data.transactions && Array.isArray(data.transactions)) {
+                 const batch = writeBatch(db);
+                 let count = 0;
+                 data.transactions.forEach(t => {
+                     const { _id, ...transData } = t; 
+                     const newRef = doc(collection(db, "transactions"));
+                     batch.set(newRef, { ...transData, uid: user.uid });
+                     count++;
+                 });
+                 await batch.commit();
+                 showToast(`Restaurados ${count} movs.`);
+             }
+             setTimeout(()=>window.location.reload(), 1500);
+         } catch (error) {
+             console.error(error);
+             showToast("Error en archivo", "error");
+         }
+      };
+      reader.readAsText(file);
+  };
 
   const openConfirm = (title, msg, action, isDanger = false) => { setDialog({ isOpen: true, title, msg, action, isDanger }); };
   const closeConfirm = () => setDialog({ ...dialog, isOpen: false });
@@ -539,10 +658,12 @@ function Dashboard({ user, logout }) {
         appTitle={appTitle} updateAppTitle={updateAppTitle}
         accounts={accounts} addAccount={addAccount} deleteAccount={(id)=>openConfirm("Borrar Cuenta", "No borra historial.", ()=>deleteAccount(id), true)}
         fixedExpensesList={fixedExpensesList} addFixedExpense={addFixedExpense} deleteFixedExpense={(id)=>openConfirm("Borrar Gasto", "¿Seguro?", ()=>deleteFixedExpense(id), true)}
+        editFixedExpense={editFixedExpense} editingFixedId={editingFixedId}
         resetAllData={()=>openConfirm("Reiniciar", "Se borrará TODO.", resetAllData, true)}
         goalOptions={goalOptions}
         newAccName={newAccName} setNewAccName={setNewAccName} newAccColor={newAccColor} setNewAccColor={setNewAccColor}
         newFixedName={newFixedName} setNewFixedName={setNewFixedName} newFixedBudget={newFixedBudget} setNewFixedBudget={setNewFixedBudget}
+        exportData={exportData} importData={importData}
       />
     </div>
   );
